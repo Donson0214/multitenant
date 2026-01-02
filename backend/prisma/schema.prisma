@@ -1,0 +1,263 @@
+// ==============================
+// Prisma Client
+// ==============================
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==============================
+// Database
+// ==============================
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==============================
+// Enums
+// ==============================
+enum UserRole {
+  OWNER
+  ANALYST
+  VIEWER
+  ADMIN
+}
+
+enum DataSourceType {
+  CSV
+  WEBHOOK
+  REST_POLL
+}
+
+enum IngestionStatus {
+  SUCCESS
+  FAILED
+}
+
+enum AutomationStatus {
+  ENABLED
+  DISABLED
+}
+
+enum AutomationRunStatus {
+  SUCCESS
+  FAILED
+}
+
+enum NotificationType {
+  IN_APP
+  EMAIL
+  WEBHOOK
+}
+
+// ==============================
+// Core Multi-Tenancy
+// ==============================
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users         Membership[]
+  dataSources   DataSource[]
+  datasets      Dataset[]
+  metrics       Metric[]
+  dashboards    Dashboard[]
+  automations   AutomationRule[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+}
+
+// ==============================
+// Users & Roles
+// ==============================
+model User {
+  id          String   @id @default(uuid())
+  firebaseUid String   @unique
+  email       String   @unique
+  name        String?
+  createdAt   DateTime @default(now())
+
+  memberships   Membership[]
+  notifications Notification[]
+  auditLogs     AuditLog[] @relation("AuditActor")
+}
+
+model Membership {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  role      UserRole
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, userId])
+  @@unique([userId])
+}
+
+// ==============================
+// Data Ingestion
+// ==============================
+model DataSource {
+  id        String         @id @default(uuid())
+  tenantId  String
+  name      String
+  type      DataSourceType
+  config    Json
+  createdAt DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  logs   IngestionLog[]
+}
+
+model Dataset {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  schema    Json
+  createdAt DateTime @default(now())
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  records  DatasetRecord[]
+  metrics  Metric[] @relation("DatasetMetrics")
+}
+
+model DatasetRecord {
+  id         String   @id @default(uuid())
+  tenantId   String
+  datasetId  String
+  eventTime  DateTime
+  data       Json
+  createdAt  DateTime @default(now())
+
+  dataset Dataset @relation(fields: [datasetId], references: [id])
+
+  @@index([tenantId, datasetId, eventTime])
+}
+
+model IngestionLog {
+  id           String           @id @default(uuid())
+  tenantId     String
+  dataSourceId String
+  status       IngestionStatus
+  message      String?
+  rawPayload   Json?
+  createdAt    DateTime @default(now())
+
+  dataSource DataSource @relation(fields: [dataSourceId], references: [id])
+
+  @@index([tenantId, dataSourceId, createdAt])
+}
+
+// ==============================
+// Metrics & Dashboards
+// ==============================
+model Metric {
+  id         String   @id @default(uuid())
+  tenantId   String
+  name       String
+  datasetId  String
+  definition Json
+  createdAt  DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  dataset Dataset @relation("DatasetMetrics", fields: [datasetId], references: [id])
+}
+
+model Dashboard {
+  id         String   @id @default(uuid())
+  tenantId   String
+  name       String
+  layout     Json
+  createdAt  DateTime @default(now())
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id])
+  permissions DashboardPermission[]
+}
+
+model DashboardPermission {
+  id          String   @id @default(uuid())
+  tenantId    String
+  dashboardId String
+  userId      String
+  canEdit     Boolean
+  createdAt   DateTime @default(now())
+
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id])
+
+  @@unique([dashboardId, userId])
+  @@index([tenantId, userId])
+}
+
+// ==============================
+// Automations & Alerts
+// ==============================
+model AutomationRule {
+  id        String           @id @default(uuid())
+  tenantId  String
+  name      String
+  metricId  String
+  condition Json
+  action    Json
+  status    AutomationStatus
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  runs   AutomationRun[]
+}
+
+model AutomationRun {
+  id        String               @id @default(uuid())
+  tenantId  String
+  ruleId    String
+  status    AutomationRunStatus
+  result    Json?
+  error     String?
+  windowStart DateTime @default(now())
+  windowEnd   DateTime?
+  createdAt DateTime @default(now())
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id])
+
+  @@index([tenantId, ruleId, createdAt])
+  @@index([tenantId, ruleId, windowStart])
+  @@unique([ruleId, windowStart])
+}
+
+// ==============================
+// Notifications
+// ==============================
+model Notification {
+  id        String           @id @default(uuid())
+  tenantId  String
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+// ==============================
+// Audit Logs
+// ==============================
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  actorUserId String
+  action      String
+  entityType  String
+  entityId    String?
+  meta        Json?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  actor  User   @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  @@index([tenantId, createdAt])
+}

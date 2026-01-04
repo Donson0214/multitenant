@@ -1,4 +1,4 @@
-import { Queue, QueueScheduler } from 'bullmq';
+import { Queue } from 'bullmq';
 import { bullmqConnection } from '@/config/bullmq';
 
 const defaultJobOptions = {
@@ -12,8 +12,6 @@ export const etlQueue = new Queue('etl', {
   ...bullmqConnection,
   defaultJobOptions,
 });
-
-export const etlScheduler = new QueueScheduler('etl', bullmqConnection);
 
 export function enqueueEtlJob(params: { tenantId: string; dataSourceId: string }) {
   return etlQueue.add('poll', params);

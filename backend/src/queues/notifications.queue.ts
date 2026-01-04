@@ -1,4 +1,4 @@
-import { Queue, QueueScheduler } from 'bullmq';
+import { Queue } from 'bullmq';
 import { bullmqConnection } from '@/config/bullmq';
 
 const defaultJobOptions = {
@@ -12,11 +12,6 @@ export const notificationsQueue = new Queue('notifications', {
   ...bullmqConnection,
   defaultJobOptions,
 });
-
-export const notificationsScheduler = new QueueScheduler(
-  'notifications',
-  bullmqConnection
-);
 
 export function enqueueNotificationJob(params: {
   tenantId: string;

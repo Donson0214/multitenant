@@ -1,4 +1,4 @@
-import { Queue, QueueScheduler } from 'bullmq';
+import { Queue } from 'bullmq';
 import { bullmqConnection } from '@/config/bullmq';
 
 const defaultJobOptions = {
@@ -12,8 +12,6 @@ export const metricsQueue = new Queue('metrics', {
   ...bullmqConnection,
   defaultJobOptions,
 });
-
-export const metricsScheduler = new QueueScheduler('metrics', bullmqConnection);
 
 export function enqueueMetricJob(params: { tenantId: string; metricId: string }) {
   return metricsQueue.add('evaluate', params);
